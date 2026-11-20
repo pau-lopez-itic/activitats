@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Com genera text un LLM: paraules i tokens</title>
+<style>
+:root{
+  --base:#1e1e2e;--mantle:#181825;--crust:#11111b;
+  --s0:#313244;--s1:#45475a;--s2:#585b70;
+  --text:#cdd6f4;--sub:#a6adc8;--ov:#6c7086;
+  --mauve:#cba6f7;--blue:#89b4fa;--green:#a6e3a1;--peach:#fab387;
+  --pink:#f5c2e7;--yellow:#f9e2af;--teal:#94e2d5;--red:#f38ba8;--sky:#89dceb;--lav:#b4befe;
+  --bg:#11111b;--actbg:#2a2740;--c1:#3a3150;--c2:#2c3a52;--c3:#2b4343;--c4:#4a3a32;
+}
+*{box-sizing:border-box}
+/* Catppuccin: Macchiato, Frappé, Latte (Mocha és el per defecte) */
+[data-theme=macchiato]{--base:#24273a;--mantle:#1e2030;--crust:#181926;--bg:#181926;--s0:#363a4f;--s1:#494d64;--s2:#5b6078;--text:#cad3f5;--sub:#a5adcb;--ov:#6e738d;--mauve:#c6a0f6;--blue:#8aadf4;--green:#a6da95;--peach:#f5a97f;--pink:#f5bde6;--yellow:#eed49f;--teal:#8bd5ca;--red:#ed8796;--sky:#91d7e3;--lav:#b7bdf8;--actbg:#2e2c47;--c1:#3b3552;--c2:#2f3b57;--c3:#2e4545;--c4:#4b3d37}
+[data-theme=frappe]{--base:#303446;--mantle:#292c3c;--crust:#232634;--bg:#232634;--s0:#414559;--s1:#51576d;--s2:#626880;--text:#c6d0f5;--sub:#a5adce;--ov:#737994;--mauve:#ca9ee6;--blue:#8caaee;--green:#a6d189;--peach:#ef9f76;--pink:#f4b8e4;--yellow:#e5c890;--teal:#81c8be;--red:#e78284;--sky:#99d1db;--lav:#babbf1;--actbg:#3a3752;--c1:#443b5a;--c2:#384460;--c3:#364b4d;--c4:#52443d}
+[data-theme=latte]{--base:#eff1f5;--mantle:#e6e9ef;--crust:#11111b;--bg:#dce0e8;--s0:#ccd0da;--s1:#bcc0cc;--s2:#acb0be;--text:#4c4f69;--sub:#5c5f77;--ov:#6c6f85;--mauve:#8839ef;--blue:#1e66f5;--green:#40a02b;--peach:#fe640b;--pink:#ea76cb;--yellow:#df8e1d;--teal:#179299;--red:#d20f39;--sky:#04a5e5;--lav:#7287fd;--actbg:#e2dcf5;--c1:#e6dcf7;--c2:#d6e2fb;--c3:#d3ecea;--c4:#fbe3d3}
+body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.4;font-size:18px}
+html{font-size:14px}
+.wrap{max-width:1320px;margin:0 auto;padding:24px 20px 48px}
+h1{font-size:2.5rem;margin:0 0 6px;color:var(--mauve)}
+.lead{color:var(--sub);margin:0 0 18px;font-size:1.35rem}
+.card{background:var(--base);border:1px solid var(--s0);border-radius:14px;padding:18px 20px;margin-bottom:16px}
+.card h2{font-size:1rem;letter-spacing:.08em;text-transform:uppercase;color:var(--ov);margin:0 0 12px;font-weight:600}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+
+/* Selector de mode principal */
+.unit{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.unit button{flex:1;min-width:220px;text-align:left;padding:12px 16px;border-radius:12px;background:var(--base);border:2px solid var(--s0)}
+.unit button b{display:block;font-size:1.5rem}
+.unit button span{font-size:1.05rem;color:var(--sub)}
+.unit button.act{border-color:var(--mauve);background:var(--actbg)}
+.unit button.act b{color:var(--mauve)}
+
+/* Text */
+#out{font-size:2.3rem;line-height:2.3;min-height:150px}
+.tok{display:inline-flex;flex-direction:column;align-items:center;vertical-align:top;padding:0 8px;margin:3px 2px;border-radius:8px;background:var(--s0);color:var(--text);transition:background .2s,outline .2s;line-height:1.9}
+.tok .id{font-size:.95rem;color:var(--ov);line-height:1;margin:-3px 0 4px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.tok.prompt{background:transparent;color:var(--sub);border:1px dashed var(--s1)}
+.tok.gen{cursor:pointer}
+.tok.gen:hover{outline:2px solid var(--lav)}
+.tok.sel{outline:2px solid var(--yellow)}
+.tok.new{background:var(--green);color:var(--crust)}
+.tok.new .id{color:var(--crust)}
+.tokmode .tok.new.c1,.tokmode .tok.new.c2,.tokmode .tok.new.c3,.tokmode .tok.new.c4{background:var(--green);color:var(--crust)}
+.tok.new{box-shadow:0 0 0 3px var(--green),0 0 18px var(--green)}
+.tok.ghost{visibility:hidden}
+.tokmode .tok{margin:3px 1px;padding:0 5px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.8rem}
+.tokmode .tok.c1{background:var(--c1)}.tokmode .tok.c2{background:var(--c2)}.tokmode .tok.c3{background:var(--c3)}.tokmode .tok.c4{background:var(--c4)}
+.tokmode .tok.prompt.c1,.tokmode .tok.prompt.c2,.tokmode .tok.prompt.c3,.tokmode .tok.prompt.c4{background:transparent}
+.sp{color:var(--ov);opacity:.8}
+.cursor{display:inline-block;width:3px;height:1.3em;background:var(--mauve);vertical-align:middle;margin:10px 0 0 4px;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.legend{display:none}
+.legend span{display:inline-block;padding:0 6px;border-radius:5px;margin:0 3px}
+.counter{float:right;font-size:1.2rem;color:var(--sub);text-transform:none;letter-spacing:0}
+.counter b{color:var(--peach)}
+
+/* Pipeline */
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
+.stage{background:var(--mantle);border:1px solid var(--s0);border-radius:10px;padding:6px 12px;position:relative;transition:border-color .3s,background .3s,transform .3s}
+.stage .n{font-size:.7rem;color:var(--ov);font-weight:700;letter-spacing:.06em}
+.stage .t{font-weight:700;font-size:1.15rem}
+.stage .d{display:none}
+.stage.on{border-color:var(--mauve);background:var(--actbg);transform:translateY(-2px)}
+.stage.on .t{color:var(--mauve)}
+.stage:not(:last-child)::after{content:"→";position:absolute;right:-11px;top:50%;transform:translateY(-50%);color:var(--s2);font-weight:700}
+@media(max-width:700px){.pipe{grid-template-columns:1fr 1fr}.stage:nth-child(2)::after{display:none}}
+
+/* Probabilitats */
+.ctx{font-size:1.4rem;color:var(--sub);margin-bottom:10px;min-height:1.5em}
+.ctx b{color:var(--text);background:var(--s0);padding:1px 7px;border-radius:6px}
+.row{display:grid;grid-template-columns:200px 1fr 120px;gap:16px;align-items:center;padding:3px 0;transition:opacity .4s}
+.row .w{font-size:1.5rem;font-weight:700;text-align:right;font-family:ui-monospace,Menlo,Consolas,monospace}
+.row .w small{display:block;font-size:.95rem;color:var(--ov);font-weight:400;line-height:1.2}
+.row .bar{height:32px;background:var(--mantle);border-radius:7px;overflow:hidden}
+.row .fill{height:100%;width:0;border-radius:7px;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+.row .p{color:var(--text);font-variant-numeric:tabular-nums;font-size:2rem;font-weight:800;text-align:right;line-height:1}
+.row.dim{opacity:.28}
+.row.win .w,.row.win .p{color:var(--green)}
+.row.win .bar{outline:2px solid var(--green);outline-offset:1px}
+#strip{position:relative;height:30px;background:var(--mantle);border-radius:9px;display:flex;margin-top:14px}
+#strip .seg{height:100%;display:flex;align-items:center;justify-content:center;font-size:.95rem;color:var(--crust);font-weight:700;overflow:hidden;white-space:nowrap;transition:opacity .3s;border-right:2px solid var(--base)}
+#strip .seg:first-child{border-radius:9px 0 0 9px}
+#strip .seg:last-of-type{border-radius:0 9px 9px 0;border-right:none}
+#marker{position:absolute;top:-10px;bottom:-10px;width:3px;background:var(--text);border-radius:2px;left:0;opacity:0;box-shadow:0 0 12px var(--text);z-index:2}
+#marker::before{content:"🎯";position:absolute;top:-24px;left:-9px;font-size:1rem}
+.striplbl{font-size:1rem;color:var(--sub);margin-top:14px}
+.status{color:var(--text);font-size:1.15rem;min-height:2.2em;margin-top:16px;padding:9px 16px;background:var(--mantle);border-radius:10px;border-left:3px solid var(--mauve)}
+.status b{color:var(--yellow)}
+
+/* Controls */
+.controls{display:flex;flex-wrap:wrap;gap:14px 22px;align-items:flex-end}
+button{font:inherit;background:var(--s0);color:var(--text);border:1px solid var(--s1);border-radius:10px;padding:12px 26px;font-size:1.15rem;cursor:pointer;transition:background .15s}
+button:hover{background:var(--s1)}
+button.primary{background:var(--mauve);color:var(--crust);border-color:var(--mauve);font-weight:600}
+button.primary:hover{background:var(--pink)}
+label{display:flex;flex-direction:column;font-size:1.05rem;color:var(--sub);gap:4px}
+select,input[type=range]{font:inherit;accent-color:var(--mauve)}
+select,textarea{background:var(--s0);color:var(--text);border:1px solid var(--s1);border-radius:8px;padding:6px 8px;font:inherit}
+textarea{width:100%;resize:vertical;min-height:80px;font-size:1.4rem}
+.val{color:var(--peach);font-weight:600}
+.rg{display:flex;align-items:center;gap:8px;font-size:1.7rem;line-height:1}
+.rg input{width:150px}
+.seg2{display:flex;background:var(--s0);border-radius:9px;padding:3px}
+.seg2 button{border:none;background:transparent;padding:8px 16px;font-size:1.05rem}
+.seg2 button.act{background:var(--mauve);color:var(--crust);font-weight:600}
+.help{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.help div{background:var(--mantle);border-radius:10px;padding:16px 22px;font-size:1.4rem;color:var(--sub)}
+.help b{color:var(--text)}
+@media(max-width:700px){.help{grid-template-columns:1fr}.row{grid-template-columns:120px 1fr 100px}#out{font-size:1.6rem}.row .p{font-size:1.7rem}.row .w{font-size:1.3rem}}
+
+/* Targeta de tokens */
+.tkexp{display:grid;grid-template-columns:1fr;gap:18px}
+.tkexp>div:first-child{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 36px}
+.tkexp>div:first-child p{margin:0}
+.fold{cursor:pointer;user-select:none;font-size:1.3rem!important}
+.fold:hover{color:var(--mauve)}
+#theme{position:fixed;top:10px;right:12px;z-index:60;display:flex;gap:7px;opacity:.5;transition:opacity .2s}
+#theme:hover{opacity:1}
+#theme button{width:14px;height:14px;min-width:0;padding:0;border-radius:50%;border:1.5px solid var(--s2);background:linear-gradient(135deg,var(--a) 50%,var(--b) 50%);font-size:0}
+#theme button.act{border-color:var(--text);transform:scale(1.25)}
+.minor{font-size:.8rem;opacity:.5;gap:2px;margin-left:auto;transition:opacity .2s}
+.minor:hover{opacity:1}
+.minor .val{color:var(--sub);font-weight:400}
+.minor input{width:90px;height:14px}
+#tkcard.closed .tkexp{display:none}
+#tkcard.closed h2{margin-bottom:0}
+@media(max-width:760px){.tkexp{grid-template-columns:1fr}}
+.tkexp p{margin:0 0 12px;color:var(--sub);font-size:1.5rem}
+.tkexp p b{color:var(--text)}
+#tkout{margin-top:10px;line-height:2.4}
+#tkout .tok{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.6rem;margin:2px 1px;padding:0 5px}
+#tkout .tok.c1{background:var(--c1)}#tkout .tok.c2{background:var(--c2)}#tkout .tok.c3{background:var(--c3)}#tkout .tok.c4{background:var(--c4)}
+.ids{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:1.2rem;color:var(--teal);background:var(--mantle);border-radius:8px;padding:8px 10px;margin-top:8px;word-break:break-all}
+.stats{display:flex;gap:16px;margin-top:8px;font-size:1.2rem;color:var(--sub)}
+.stats b{color:var(--peach);font-size:1.8rem}
+
+/* Temperatura gran */
+.tempbig{display:flex;align-items:center;gap:22px;margin-top:0;padding:12px 20px;background:var(--mantle);border-radius:12px;border-left:4px solid var(--peach)}
+.tempbig .tlabel{font-size:1.6rem;font-weight:700;white-space:nowrap}
+.tempbig .tlabel .val{font-size:2rem;margin-left:10px;font-variant-numeric:tabular-nums}
+.tslider{flex:1}
+.tslider input{width:100%;height:32px;accent-color:var(--peach);cursor:pointer}
+.tslider input::-webkit-slider-thumb{transform:scale(1.5)}
+.tslider input::-moz-range-thumb{transform:scale(1.5)}
+.tticks{display:flex;justify-content:space-between;font-size:1rem;color:var(--sub)}
+@media(max-width:700px){.tempbig{flex-direction:column;align-items:stretch;gap:8px}}
+
+/* Barra de botons flotant, sempre disponible */
+.ctlbtns{display:flex;gap:6px;align-self:flex-end}
+.gal-btns .tempc{display:flex;flex-direction:row;align-items:center;gap:6px;margin-left:10px;font-size:.95rem;white-space:nowrap;color:var(--text)}
+.gal-btns .tempc input{width:110px;height:20px;margin:0;accent-color:var(--peach)}
+.gal-btns .tempc .val{font-size:.95rem;min-width:2.2em}
+.gal-btns #pv{min-width:3.6em}
+#galrows .row.out{opacity:.4}
+#galrows .row.out .p{text-decoration:line-through;color:var(--ov)}
+#galrows .row.out .fill{background:var(--s2)!important}
+.status+.controls{gap:8px 14px;align-items:center}
+@media(min-width:1200px){.status+.controls{flex-wrap:nowrap}}
+.controls .ctlbtns{align-self:center}
+.controls .ctlbtns button{padding:6px 14px;font-size:.95rem}
+.controls label{flex-direction:row;align-items:center;gap:6px;font-size:.95rem;white-space:nowrap}
+.controls select{padding:5px 8px;font-size:.9rem;max-width:210px}
+.controls .seg2 button{padding:5px 10px;font-size:.88rem}
+.controls input[type=range]{width:100px;height:20px;margin:0}
+.controls .tempc input{accent-color:var(--peach)}
+.controls .val{font-size:.95rem;min-width:2.2em}
+.ctlbtns button{padding:8px 16px;font-size:1rem;white-space:nowrap}
+/* Els controls es queden visibles mentre es veu la secció del model, i desapareixen amb ella */
+.status+.controls{position:sticky;bottom:0;z-index:5;background:var(--base);padding-bottom:14px;box-shadow:0 -14px 14px -8px var(--base)}
+
+/* Alcada estable: res no es mou entre passos */
+/* Pas 1: el context que es torna a llegir queda ressaltat */
+.ctx .rw{display:inline-block;padding:0 5px;margin:1px 1px;border-radius:6px;animation:rd .45s ease-out both}
+@keyframes rd{0%{background:transparent;color:var(--sub)}35%{background:var(--mauve);color:var(--crust);transform:translateY(-2px)}100%{background:var(--s0);color:var(--text);transform:none}}
+/* Passos més petits i discrets, i més aire entre el context i les opcions */
+.pipe{gap:6px;margin-bottom:12px}
+.stage{display:flex;align-items:baseline;gap:6px;padding:3px 10px;border-radius:8px}
+.stage .n{font-size:.62rem;letter-spacing:.04em}
+.stage .t{font-size:.92rem;font-weight:600;color:var(--sub)}
+.stage.on{transform:none}
+.stage.on .t{color:var(--mauve)}
+.stage:not(:last-child)::after{right:-9px;font-size:.8rem}
+.ctx{margin:24px 0 36px}
+#rows{min-height:250px}
+.ctx{min-height:2.2em}
+.striplbl{min-height:1.4em}
+.status{min-height:3em}
+@media(max-width:700px){#rows{min-height:300px}}
+.status .hint{font-size:.88em;color:var(--sub);font-weight:400}
+
+/* Controls dins la targeta del model */
+.status+.controls{margin-top:14px;padding-top:12px;border-top:1px solid var(--s0)}
+
+/* Seccions plegables */
+.card.closed .cbody{display:none}
+.card.closed>h2{margin-bottom:0}
+
+/* Galeria */
+.galnav{display:flex;gap:6px;align-items:center;margin-bottom:16px}
+.galnav select{font-size:1rem;padding:8px 12px;min-width:280px;cursor:pointer}
+.galnav button{padding:8px 16px;font-size:1rem}
+#galcard.closed .galbody{display:none}
+#galcard.closed h2{margin-bottom:0}
+.gal-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.gal-chips button{padding:8px 16px;font-size:1.05rem;border-radius:999px}
+.gal-chips button.act{background:var(--mauve);color:var(--crust);border-color:var(--mauve);font-weight:600}
+.gal-tag{display:inline-block;font-size:1rem;font-weight:700;padding:3px 14px;border-radius:999px;color:var(--crust)}
+.gal-prompt{font-size:2.2rem;margin:16px 0 10px}
+.gal-prompt .blank{color:var(--mauve);border-bottom:3px dashed var(--mauve);padding:0 8px}
+.gal-prompt .blank.filled{color:var(--green);border-color:var(--green);font-weight:700}
+.gal-note{color:var(--sub);font-size:1.3rem;margin-bottom:28px}
+#galrows .row{grid-template-columns:200px 1fr 120px 80px}
+#galrows .cnt{font-weight:800;font-size:1.8rem;color:var(--yellow);font-variant-numeric:tabular-nums}
+.gal-btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:24px;align-items:center}
+.gal-btns button{padding:8px 16px;font-size:1rem;white-space:nowrap}
+.gal-btns .gal-res{margin-left:12px}
+.gal-res{font-size:1.1rem;color:var(--sub)}
+.gal-res b{color:var(--peach)}
+@media(max-width:700px){#galrows .row{grid-template-columns:120px 1fr 100px 56px}.gal-prompt{font-size:1.6rem}}
+
+.flyer{position:fixed;z-index:50;pointer-events:none;padding:0 8px;border-radius:8px;background:var(--green);color:var(--crust);font-weight:600;font-family:ui-monospace,Menlo,Consolas,monospace;box-shadow:0 6px 24px rgba(166,227,161,.35)}
+</style>
+</head>
+<body>
+<div id="theme"><button data-t="mocha" class="act" title="Mocha" aria-label="Mocha" style="--a:#1e1e2e;--b:#cba6f7"></button><button data-t="macchiato" title="Macchiato" aria-label="Macchiato" style="--a:#24273a;--b:#c6a0f6"></button><button data-t="frappe" title="Frappé" aria-label="Frappé" style="--a:#303446;--b:#ca9ee6"></button><button data-t="latte" title="Latte" aria-label="Latte" style="--a:#eff1f5;--b:#8839ef"></button></div>
+<div class="wrap">
+  <h1>Com genera text un model de llenguatge</h1>
+  <p class="lead">Un LLM escriu <b>un tros cada vegada</b>: llegeix → calcula → tria → afegeix. <span style="color:var(--ov)">(Simulació)</span></p>
+
+  <div class="unit" id="unit">
+    <button data-u="word" class="act"><b>📝 Paraula a paraula</b><span>Versió simplificada</span></button>
+    <button data-u="token"><b>🧩 Token a token</b><span>Com ho fa de veritat</span></button>
+  </div>
+
+  <div class="card" id="tkcard" style="display:none">
+    <h2 id="tkh" class="fold">▾ Què és un token?</h2>
+    <div class="tkexp">
+      <div>
+        <p>🧩 Un <b>token</b> = un tros de text</p>
+        <p>🔢 Cada token és un <b>número</b></p>
+        <p>➡️ El model genera <b>un token</b> cada cop</p>
+        <p style="color:var(--ov);font-size:1.1rem"><span class="mono">▁</span> = espai</p>
+      </div>
+      <div>
+        <label>Escriu un text i mira'n els tokens
+          <textarea id="tkin">La capital de Catalunya és</textarea>
+        </label>
+        <div id="tkout"></div>
+        <div class="stats"><span>Paraules: <b id="nw">0</b></span><span>Tokens: <b id="nt">0</b></span><span>Caràcters: <b id="nc">0</b></span></div>
+        <div class="ids" id="tkids"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="textcard">
+    <h2>Text generat <span class="counter" id="counter"></span></h2>
+    <div id="out"></div>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="card" id="modelcard" data-title="⚙️ Com tria el model">
+    <div class="pipe">
+      <div class="stage" id="st1"><div class="n">PAS 1</div><div class="t">Llegir</div><div class="d" id="d1"></div></div>
+      <div class="stage" id="st2"><div class="n">PAS 2</div><div class="t">Probabilitats</div><div class="d" id="d2"></div></div>
+      <div class="stage" id="st3"><div class="n">PAS 3</div><div class="t">Triar</div><div class="d" id="d3"></div></div>
+      <div class="stage" id="st4"><div class="n">PAS 4</div><div class="t">Afegir</div><div class="d" id="d4"></div></div>
+    </div>
+
+    <div class="ctx" id="ctx"></div>
+    <div id="rows"></div>
+    <div class="striplbl" id="striplbl"></div>
+    <div id="strip"><div id="marker"></div></div>
+    <div class="status" id="status"></div>
+
+    <div class="controls">
+      <div class="ctlbtns">
+        <button class="primary" id="play">▶ Genera</button>
+        <button id="stepBtn">⏭ Un pas</button>
+        <button id="reset">↺ Reinicia</button>
+      </div>
+      <label class="tempc" title="Temperatura: 0 = previsible, 2 = sorprenent">🌡️
+        <input type="range" id="temp" min="0" max="2" step="0.1" value="1">
+        <span class="val" id="tv">1.0</span>
+      </label>
+      <label title="Frase inicial">
+        <select id="prompt">
+          <option value="La capital de Catalunya és">📏 La capital de Catalunya és…</option>
+          <option value="Avui el cel està">⛅ Avui el cel està…</option>
+          <option value="Per sopar vull">🍕 Per sopar vull…</option>
+        </select>
+      </label>
+      <label title="Manera de triar">
+        <div class="seg2" id="mode">
+          <button data-m="sample" class="act">🎯 Mostreig</button>
+          <button data-m="greedy">La més probable</button>
+        </div>
+      </label>
+      <label title="Velocitat">⏩
+        <input type="range" id="speed" min="0.25" max="4" step="0.25" value="1">
+        <span class="val" id="sv">1×</span>
+      </label>
+    </div>
+  </div>
+  <div class="card" id="galcard">
+    <h2 id="galh" class="fold">▾ 🔬 Galeria: no sempre és evident</h2>
+    <div class="galbody">
+    <div class="galnav">
+      <button id="galprev" title="Anterior">◀</button>
+      <select id="galchips"></select>
+      <button id="galnext" title="Següent">▶</button>
+    </div>
+    <span class="gal-tag" id="galtag"></span>
+    <div class="gal-prompt" id="galprompt"></div>
+    <div class="gal-note" id="galnote"></div>
+    <div id="galrows"></div>
+    <div class="gal-btns">
+      <button class="primary" id="gal1">🎯 Tira 1 vegada</button>
+      <button id="gal20">🎯🎯 Tira 20 vegades</button>
+      <button id="galclr">↺ Esborra</button>
+      <label class="tempc" title="Temperatura: 0 = previsible, 2 = sorprenent">🌡️
+        <input type="range" id="temp2" min="0" max="2" step="0.1" value="1">
+        <span class="val" id="tv2">1.0</span>
+      </label>
+      <label class="tempc" title="Top-k: només es tria entre les k opcions més probables">top-k
+        <input type="range" id="topk" min="1" max="12" step="1" value="12">
+        <span class="val" id="kv">tots</span>
+      </label>
+      <label class="tempc" title="Top-p: només es tria entre les opcions més probables que sumen un p % de probabilitat">top-p
+        <input type="range" id="topp" min="0.1" max="1" step="0.05" value="1">
+        <span class="val" id="pv">100 %</span>
+      </label>
+      <span class="gal-res" id="galres"></span>
+    </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ---------- Model de joguina (nivell paraula) ---------- */
+const M = {
+  "ciutat":[["que",.35],["plena",.25],["amb",.25],["oberta",.15]],
+  "que":[["té",.3],["mira",.25],["no",.2],["viu",.25]],
+  "té":[["una",.4],["molta",.3],["un",.3]],
+  "un":[["clima",.4],["ritme",.35],["port",.25]],
+  "una":[["història",.45],["llum",.3],["platja",.25]],
+  "molta":[["vida",.4],["història",.3],["llum",.3]],
+  "mira":[["el",.6],["la",.4]],
+  "el":[["mar",.4],["clima",.3],["ritme",.3]],
+  "la":[["gent",.4],["mar",.3],["vida",.3]],
+  "plena":[["de",1]],
+  "de":[["vida",.32],["gent",.28],["color",.17],["colors",.08],["llum",.15]],
+  "amb":[["una",.4],["molta",.3],["el",.3]],
+  "oberta":[["al",.5],["a",.5]],
+  "al":[["món",.5],["mar",.5]],
+  "a":[["tothom",.6],["la",.4]],
+  "viu":[["de",.4],["cada",.3],["amb",.3]],
+  "cada":[["dia",.6],["moment",.4]],
+  "no":[["dorm",.5],["para",.5]],
+  "dorm":[["mai",.6],[".",.4]],
+  "para":[["mai",.7],[".",.3]],
+  "mai":[[".",.7],[",",.3]],
+  "vida":[[".",.5],[",",.3],["i",.2]],
+  ",":[["i",.5],["però",.3],["amb",.2]],
+  "però":[["no",.5],["sempre",.5]],
+  "sempre":[["viu",.5],["té",.5]],
+  "i":[["esmorzo",.25],["escric",.12],["llum",.18],["història",.17],["mar",.15],["somriu",.13]],
+  "esmorzo":[["amb",.4],["a",.3],["de",.3]],
+  "escric":[["una",.5],["amb",.5]],
+  "llenguatge":[["predeixen",.5],["generen",.3],["aprenen",.2]],
+  "predeixen":[["paraules",.4],["paràgrafs",.12],["tokens",.33],["patrons",.15]],
+  "generen":[["text",.45],["respostes",.35],["resums",.2]],
+  "text":[["nou",.4],["coherent",.35],["fluid",.25]],
+  "respostes":[["útils",.5],["variades",.5]],
+  "resums":[["útils",.6],[".",.4]],
+  "aprenen":[["patrons",.6],["relacions",.4]],
+  "patrons":[["de",.6],["complexos",.4]]
+};
+Object.assign(M,{
+  "és":[["Barcelona",.85],["Girona",.06],["Tarragona",.04],["Lleida",.03],["París",.02]],
+  "barcelona":[[".",1]],"girona":[[".",1]],"tarragona":[[".",1]],"lleida":[[".",1]],"parís":[["?",1]],
+  "està":[["ennuvolat",.45],["blau",.30],["gris",.15],["net",.06],["negre",.04]],
+  "ennuvolat":[["i",.55],[".",.45]],"blau":[["i",.5],[".",.5]],"gris":[["i",.5],[".",.5]],"net":[["i",.4],[".",.6]],"negre":[["i",.6],[".",.4]],
+  "fa":[["fred",.4],["sol",.3],["vent",.2],["calor",.1]],
+  "fred":[[".",1]],"sol":[[".",1]],"vent":[[".",1]],"calor":[[".",1]],"plou":[[".",1]],
+  "vull":[["pizza",.24],["pasta",.22],["amanida",.20],["truita",.18],["sushi",.16]],
+  "pizza":[[".",.5],["amb",.3],["i",.2]],"pasta":[[".",.5],["amb",.3],["i",.2]],"amanida":[[".",.5],["amb",.3],["i",.2]],"truita":[[".",.5],["amb",.3],["i",.2]],"sushi":[[".",.6],["i",.4]],
+  "formatge":[[".",1]],"tomàquet":[[".",1]],"pernil":[[".",1]],"postres":[[".",1]],"fruita":[[".",1]]
+});
+const WEATHER=new Set(["ennuvolat","blau","gris","net","negre"]);
+const FOOD=new Set(["pizza","pasta","amanida","truita","sushi"]);
+const END=new Set([".","?","!"]);
+const FALLBACK=[[".",.55],[",",.2],["i",.25]];
+const PUNCT=new Set([".",",","!","?",";",":","'"]);
+const COLORS=["--mauve","--blue","--teal","--peach","--pink","--yellow","--sky","--red"];
+const MAXWORDS=20;
+
+/* ---------- Tokenitzador simulat ---------- */
+const TK={
+  "barcelona":"Bar|cel|ona","ciutat":"ciut|at","models":"mod|els","llenguatge":"lleng|uat|ge","matí":"mat|í","llevo":"lle|vo","cada":"C|ada",
+  "història":"hist|òria","plena":"plen|a","oberta":"ober|ta","tothom":"tot|hom","moment":"mom|ent","esmorzo":"es|mor|zo","escric":"es|cric",
+  "predeixen":"pred|ei|xen","paraules":"par|aules","paràgrafs":"par|àgr|afs","tokens":"tok|ens","patrons":"patr|ons","generen":"gener|en",
+  "respostes":"res|post|es","resums":"res|ums","aprenen":"apr|enen","relacions":"rel|acions","complexos":"compl|exos","coherent":"coher|ent",
+  "variades":"vari|ades","platja":"plat|ja","color":"col|or","colors":"col|ors","somriu":"som|riu","sempre":"semp|re","ritme":"rit|me",
+  "clima":"clim|a","catalunya":"Catal|unya","capital":"capit|al","girona":"Gir|ona","tarragona":"Tarr|ag|ona","lleida":"Lle|ida","parís":"Par|ís",
+  "ennuvolat":"en|nu|vol|at","negre":"neg|re","sopar":"sop|ar","pizza":"pizz|a","pasta":"past|a","amanida":"aman|ida","truita":"tru|ita",
+  "sushi":"sus|hi","formatge":"form|atge","tomàquet":"tom|à|quet","pernil":"pern|il","postres":"post|res","fruita":"fru|ita","calor":"cal|or","útils":"út|ils","fluid":"flu|id","molta":"mol|ta","tokenitzador":"token|itz|ador","tokenitzadors":"token|itz|adors",
+  "divideixen":"divid|ei|xen","trossos":"tross|os","intel·ligència":"intel|·|lig|ència","artificial":"art|ific|ial","model":"mod|el"
+};
+const SINGLE=new Set(["que","té","un","una","mira","el","la","de","amb","al","a","viu","no","dorm","para","mai","vida","i","però","gent","llum","mar","món","dia","port","text","nou","és","els","em","en","per","com","més","les","es","del","dels","d","l","s","n","hi","ho","ja","molt","tot","bé","fa","sense","quan","on","són","ha","han","hem","jo","tu","ell","ella","nosaltres"]);
+function splitWord(w){
+  const lw=w.toLowerCase();
+  if(TK[lw]){
+    const parts=TK[lw].split("|");
+    // respecta majúscules de l'original
+    let pos=0;return parts.map(p=>{const s=w.slice(pos,pos+p.length);pos+=p.length;return s;});
+  }
+  if(SINGLE.has(lw)||w.length<=4||PUNCT.has(w))return [w];
+  const out=[];let i=0;
+  while(i<w.length){let n=w.length-i<=5?w.length-i:(out.length===0?4:3);out.push(w.slice(i,i+n));i+=n;}
+  return out;
+}
+// tokens d'una paraula: el primer porta ▁ si hi ha espai davant
+function tokensOf(w,spaceBefore){
+  const parts=splitWord(w);
+  return parts.map((p,i)=>(i===0&&spaceBefore&&!PUNCT.has(w)?"▁":"")+p);
+}
+function tokId(t){let h=2166136261;for(const c of t){h^=c.codePointAt(0);h=Math.imul(h,16777619)>>>0;}return 100+(h%49900);}
+function showTok(t){return t.startsWith("▁")?'<span class="sp">▁</span>'+esc(t.slice(1)):esc(t);}
+function esc(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;");}
+
+/* ---------- Estat ---------- */
+const $=id=>document.getElementById(id);
+const out=$("out"),rowsEl=$("rows"),strip=$("strip"),marker=$("marker"),status=$("status"),ctx=$("ctx"),striplbl=$("striplbl");
+let unit="word",mode="sample";
+let words=[];      // paraules completes
+let seq=[];        // unitats visibles: {t, prompt, hist}
+let promptLen=0;   // nombre d'unitats de la frase inicial
+let partial=null;  // en mode token: {cands:[{w,p,toks}], k}
+let running=false,busy=false,done=false,token=0,lastNew=-1;
+
+const speed=()=>parseFloat($("speed").value);
+const temp=()=>parseFloat($("temp").value);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms/speed()));
+const fmt=p=>{const r=Math.round(p*100);return r<1?"<1 %":r+" %";};
+const U=()=>unit==="token"?{one:"token",art:"el token",these:"tokens"}:{one:"paraula",art:"la paraula",these:"paraules"};
+
+function stage(n){for(let i=1;i<=4;i++)$("st"+i).classList.toggle("on",i===n);}
+function setTexts(){
+  const tk=unit==="token";
+  $("d1").textContent=tk?"Rep els números dels tokens":"Mira el text";
+  $("d2").textContent=tk?"De cada token possible":"De cada paraula possible";
+  $("d3").textContent="Rifa (mostreig)";
+  $("d4").textContent="I torna a començar";
+  $("legend").innerHTML=tk
+    ?'<span style="border:1px dashed var(--s1)">vora</span> inici · <span style="background:#3a3150">color</span> generat · número = ID · clica per veure la tria'
+    :'<span style="border:1px dashed var(--s1)">vora</span> inici · <span style="background:var(--s0)">fons</span> generat · clica per veure la tria';
+  $("tkcard").style.display=tk?"block":"none";
+  $("galcard").style.display=tk?"none":"";
+  document.querySelectorAll("#mode button")[1].textContent=tk?"El més probable":"La més probable";
+  out.classList.toggle("tokmode",tk);
+}
+
+function render(opts={}){
+  out.innerHTML="";
+  const tk=unit==="token";
+  let wordCount=0;
+  seq.forEach((u,i)=>{
+    const s=document.createElement("span");
+    let c="tok";
+    c+=i<promptLen?" prompt":" gen";
+    if(tk){if(u.t.startsWith("▁")||i===0)wordCount++;c+=" c"+((wordCount-1)%4+1);}
+    if(i===(opts.newest!==undefined?opts.newest:lastNew))c+=" new";
+    if(i===opts.ghost)c+=" ghost";
+    if(i===opts.sel)c+=" sel";
+    s.className=c;s.dataset.i=i;
+    s.innerHTML=tk?`<span>${showTok(u.t)}</span><span class="id">${tokId(u.t)}</span>`:esc(u.t);
+    if(i>=promptLen)s.onclick=()=>showPast(i);
+    out.appendChild(s);
+  });
+  if(!done){const c=document.createElement("span");c.className="cursor";out.appendChild(c);}
+  const gen=seq.length-promptLen;
+  $("counter").innerHTML=tk
+    ?`Paraules: <b>${words.length}</b> · Tokens: <b>${seq.length}</b> (generats: ${gen})`
+    :`Paraules: <b>${words.length}</b> (generades: ${gen})`;
+}
+
+function wordDist(){
+  const last=words[words.length-1].toLowerCase();
+  const prev=(words[words.length-2]||"").toLowerCase();
+  let c=(M[last]||FALLBACK).slice();
+  if(last==="i"&&WEATHER.has(prev))c=[["fa",.7],["plou",.3]];
+  else if(last==="i"&&FOOD.has(prev))c=[["postres",.55],["fruita",.45]];
+  else if(last==="amb"&&FOOD.has(prev))c=[["formatge",.45],["tomàquet",.35],["pernil",.2]];
+  if(words.length-wordsPrompt>=MAXWORDS-1)c=[[".",1]];
+  const T=temp();
+  const mx=Math.max(...c.map(x=>x[1]));const ws=c.map(x=>T<0.05?(x[1]===mx?1:0):Math.pow(x[1],1/T));
+  const sum=ws.reduce((a,b)=>a+b,0);
+  return c.map((x,i)=>({w:x[0],p:ws[i]/sum,toks:tokensOf(x[0],true)})).sort((a,b)=>b.p-a.p);
+}
+let wordsPrompt=0;
+
+// candidats per al pas actual (paraules o tokens)
+function candidates(){
+  if(unit==="word"){return wordDist().map(c=>({label:c.w,p:c.p,word:c.w}));}
+  const base=partial?partial.cands:wordDist();
+  const k=partial?partial.k:0;
+  const groups=new Map();
+  base.forEach(c=>{const t=c.toks[k];if(!groups.has(t))groups.set(t,{label:t,p:0,words:[]});const g=groups.get(t);g.p+=c.p;g.words.push(c);});
+  const tot=[...groups.values()].reduce((a,g)=>a+g.p,0);
+  return [...groups.values()].map(g=>({...g,p:g.p/tot})).sort((a,b)=>b.p-a.p);
+}
+
+function ctxHTML(upto,anim){
+  const tk=unit==="token";
+  const dly=Math.min(.18,.7/Math.max(upto,1))/speed();
+  const items=seq.slice(0,upto).map((u,i)=>{
+    const txt=tk?showTok(u.t):esc(u.t);
+    const s=i===upto-1?"<b>"+txt+"</b>":txt;
+    return anim?`<span class="rw" style="animation-delay:${(i*dly).toFixed(2)}s">${s}</span>`:s;
+  });
+  return (tk?`Context (${upto} tokens): `:"Context: ")+items.join(tk?" <span style='color:var(--s2)'>|</span> ":" ")+" <span style='color:var(--ov)'>___ ?</span>";
+}
+
+function labelHTML(c){
+  if(unit==="token")return `${showTok(c.label)}<small>${tokId(c.label)}</small>`;
+  return c.label==="."?"« . »":c.label===","?"« , »":esc(c.label);
+}
+
+function drawDist(cands,animate){
+  rowsEl.innerHTML="";strip.querySelectorAll(".seg").forEach(e=>e.remove());
+  const rowEls=cands.map((c,i)=>{
+    const r=document.createElement("div");r.className="row";
+    r.innerHTML=`<div class="w">${labelHTML(c)}</div><div class="bar"><div class="fill" style="background:var(${COLORS[i%COLORS.length]})"></div></div><div class="p">${fmt(c.p)}</div>`;
+    rowsEl.appendChild(r);return r;
+  });
+  cands.forEach((c,i)=>{
+    const s=document.createElement("div");s.className="seg";
+    s.style.width=(c.p*100)+"%";s.style.background=`var(${COLORS[i%COLORS.length]})`;
+    s.textContent=c.p>.08?c.label.replace("▁",""):"";strip.insertBefore(s,marker);
+  });
+  const set=()=>rowEls.forEach((r,i)=>r.querySelector(".fill").style.width=(cands[i].p*100)+"%");
+  if(animate)requestAnimationFrame(()=>requestAnimationFrame(set));else{rowEls.forEach(r=>r.querySelector(".fill").style.transition="none");set();}
+  return rowEls;
+}
+
+function highlight(rowEls,idx){
+  rowEls.forEach((el,i)=>el.classList.add(i===idx?"win":"dim"));
+  strip.querySelectorAll(".seg").forEach((s,i)=>s.style.opacity=i===idx?1:.25);
+}
+
+function showPast(i){
+  if(busy||running)return;
+  const h=seq[i].hist;if(!h)return;
+  stage(0);
+  ctx.innerHTML=ctxHTML(i);
+  const rowEls=drawDist(h.cands,false);
+  highlight(rowEls,h.idx);rowsEl.dataset.prev="";
+  striplbl.textContent=h.r==null?"":"La rifa 🎯";
+  marker.style.transition="none";
+  if(h.r!=null){marker.style.opacity=1;marker.style.left=(h.r*100)+"%";}else marker.style.opacity=0;
+  const ch=h.cands[h.idx];
+  status.innerHTML=`Aquí va guanyar <b>«${unit==="token"?showTok(ch.label):esc(ch.label)}»</b> (${fmt(ch.p)}).`;
+  render({sel:i,newest:-1});
+}
+
+async function fly(fromEl,html,targetIdx){
+  render({ghost:targetIdx});
+  const target=out.querySelector(`[data-i="${targetIdx}"]`);
+  const a=fromEl.getBoundingClientRect(),b=target.getBoundingClientRect();
+  const f=document.createElement("div");f.className="flyer";f.innerHTML=html;
+  f.style.left=a.left+"px";f.style.top=a.top+"px";f.style.lineHeight="1.9";f.style.transformOrigin="0 0";const fs0=parseFloat(getComputedStyle(fromEl).fontSize),fs1=parseFloat(getComputedStyle(target).fontSize);f.style.fontSize=fs0+"px";const ratio=fs1/fs0;
+  document.body.appendChild(f);
+  const dur=700/speed();
+  f.animate([{transform:"translate(0,0) scale(1)"},{transform:`translate(${b.left-a.left}px,${b.top-a.top}px) scale(${ratio})`}],{duration:dur,easing:"cubic-bezier(.5,0,.2,1)",fill:"forwards"});
+  await new Promise(r=>setTimeout(r,dur));
+  f.remove();
+}
+
+async function step(){
+  if(busy||done)return;
+  busy=true;const my=token;const tk=unit==="token";
+
+  // Pas 1
+  lastNew=-1;stage(1);render();
+  ctx.innerHTML=ctxHTML(seq.length,true);
+  rowsEl.innerHTML="";rowsEl.dataset.prev="";strip.querySelectorAll(".seg").forEach(e=>e.remove());striplbl.textContent="";
+  marker.style.opacity=0;marker.style.transition="none";marker.style.left="0%";
+  status.innerHTML=tk
+    ?`Torna a llegir tot el context, ara en números: <span class="mono" style="color:var(--teal)">[${seq.length>6?"…, ":""}${seq.slice(-6).map(u=>tokId(u.t)).join(", ")}]</span>`
+    :"El model torna a llegir tot el context, des del principi.";
+  await sleep(1400);if(my!==token)return;
+
+  // Pas 2
+  stage(2);ctx.innerHTML=ctxHTML(seq.length);
+  const cands=candidates();
+  if(tk&&partial){
+    status.innerHTML=`<b>«${showTok(seq[seq.length-1].t)}»</b> és mitja paraula. Com continua?`+(cands.length===1?" Gairebé segur!":"");
+  }else{
+    status.innerHTML=`Què ve després de <b>«${tk?showTok(seq[seq.length-1].t):esc(words[words.length-1])}»</b>?`;
+  }
+  const rowEls=drawDist(cands,true);
+  await sleep(1400);if(my!==token)return;
+
+  // Pas 3
+  stage(3);
+  let idx=0,r=null;
+  if(mode==="greedy"){
+    status.innerHTML=`Sense atzar: s'agafa el primer.`;
+    await sleep(900);if(my!==token)return;
+  }else{
+    striplbl.textContent="La rifa 🎯";
+    r=Math.random();let acc=0;idx=cands.length-1;
+    for(let i=0;i<cands.length;i++){acc+=cands[i].p;if(r<acc){idx=i;break;}}
+    status.innerHTML="Es tira el dard a l'atzar…";
+    marker.style.opacity=1;void marker.offsetWidth;
+    marker.style.transition="left "+(1.4/speed())+"s cubic-bezier(.3,.7,.2,1)";
+    marker.style.left=(r*100)+"%";
+    await sleep(1600);if(my!==token)return;
+  }
+  highlight(rowEls,idx);
+  const ch=cands[idx];
+  const shown=tk?showTok(ch.label):esc(ch.label);
+  status.innerHTML=`Guanya <b>«${shown}»</b> (${fmt(ch.p)})`+(idx>0&&mode==="sample"?" 🍀 no era el favorit!":"");
+  await sleep(850);if(my!==token)return;
+
+  // Pas 4
+  stage(4);
+  seq.push({t:ch.label,hist:{cands,idx,r}});
+  const i=seq.length-1;
+  let completed=null;
+  if(tk){
+    const k=partial?partial.k:0;
+    const remaining=ch.words;
+    const finished=remaining.find(c=>c.toks.length===k+1);
+    if(finished){completed=finished.w;partial=null;}
+    else partial={cands:remaining,k:k+1};
+  }else completed=ch.word;
+  if(completed)words.push(completed);
+  await fly(rowEls[idx].querySelector(".w"),shown,i);if(my!==token)return;
+  if(completed&&(END.has(completed)||words.length-wordsPrompt>=MAXWORDS))done=true;
+  lastNew=i;render({newest:i});
+  if(tk&&completed&&ch.words[0].toks.length>1)status.innerHTML=`Paraula acabada: <b>«${esc(completed)}»</b> = ${ch.words[0].toks.length} tokens.`;
+  await sleep(tk&&completed&&ch.words[0].toks.length>1?1100:800);if(my!==token)return;
+  busy=false;
+  if(done)finish();
+}
+
+function finish(){
+  done=true;running=false;busy=false;stage(0);
+  $("play").textContent="▶ Genera";
+  render();
+  status.innerHTML=(unit==="token"
+    ?`Fi! ${words.length} paraules = ${seq.length} tokens. `
+    :"Fi! ")+'<span class="hint">Reinicia i sortirà un text diferent.</span>';
+}
+
+async function loop(){while(running&&!done){await step();if(!running)break;await sleep(200);}}
+
+function reset(){
+  token++;running=false;busy=false;done=false;partial=null;lastNew=-1;
+  words=$("prompt").value.split(" ");wordsPrompt=words.length;
+  if(!tkEdited){$("tkin").value=$("prompt").value;updTk();}
+  seq=[];
+  if(unit==="token")words.forEach((w,i)=>tokensOf(w,i>0).forEach(t=>seq.push({t})));
+  else words.forEach(w=>seq.push({t:w}));
+  promptLen=seq.length;
+  $("play").textContent="▶ Genera";stage(0);
+  rowsEl.innerHTML="";strip.querySelectorAll(".seg").forEach(e=>e.remove());marker.style.opacity=0;striplbl.textContent="";
+  ctx.innerHTML=ctxHTML(seq.length);
+  render();
+  preview(true);
+}
+
+/* Vista prèvia en directe de les probabilitats (canvia amb la temperatura) */
+function preview(fresh){
+  if(busy||done)return;
+  const cands=candidates();
+  const rows=[...rowsEl.querySelectorAll(".row")];
+  const same=!fresh&&rowsEl.dataset.prev==="1"&&rows.length===cands.length&&cands.every((c,i)=>rows[i].dataset.l===c.label);
+  stage(0);marker.style.opacity=0;striplbl.textContent="";
+  ctx.innerHTML=ctxHTML(seq.length);
+  if(same){
+    rows.forEach((r,i)=>{r.querySelector(".fill").style.width=(cands[i].p*100)+"%";r.querySelector(".p").textContent=fmt(cands[i].p);});
+    strip.querySelectorAll(".seg").forEach((s,i)=>{s.style.width=(cands[i].p*100)+"%";s.textContent=cands[i].p>.08?cands[i].label.replace("▁",""):"";});
+  }else{
+    const els=drawDist(cands,true);els.forEach((r,i)=>r.dataset.l=cands[i].label);
+    rowsEl.dataset.prev="1";
+  }
+  const T=temp();
+  status.innerHTML=(unit==="token"&&seq.length===promptLen?`${words.length} paraules = ${seq.length} tokens. `:"")
+    +`<span class="hint">🌡️ ${T.toFixed(1)}: ${T<0.05?"només pot sortir la més probable":T<0.8?"la favorita guanya pes":T<=1.2?"probabilitats originals":"les opcions s'igualen"}. Mou la temperatura i prem «Genera».</span>`;
+}
+
+$("play").onclick=()=>{if(done)reset();running=!running;$("play").textContent=running?"⏸ Pausa":"▶ Genera";if(running)loop();};
+$("stepBtn").onclick=()=>{if(done)reset();running=false;$("play").textContent="▶ Genera";step();};
+$("reset").onclick=reset;
+$("prompt").onchange=reset;
+$("mode").querySelectorAll("button").forEach(b=>b.onclick=()=>{mode=b.dataset.m;$("mode").querySelectorAll("button").forEach(x=>x.classList.toggle("act",x===b));});
+$("unit").querySelectorAll("button").forEach(b=>b.onclick=()=>{unit=b.dataset.u;$("unit").querySelectorAll("button").forEach(x=>x.classList.toggle("act",x===b));setTexts();reset();});
+function setTheme(t){document.documentElement.dataset.theme=t;$("theme").querySelectorAll("button").forEach(x=>x.classList.toggle("act",x.dataset.t===t));try{localStorage.setItem("llm-theme",t);}catch(e){}}
+$("theme").querySelectorAll("button").forEach(b=>b.onclick=()=>setTheme(b.dataset.t));
+try{const st=localStorage.getItem("llm-theme");if(st)setTheme(st);}catch(e){}
+$("temp").oninput=e=>{$("tv").textContent=parseFloat(e.target.value).toFixed(1);preview(false);};
+$("speed").oninput=e=>$("sv").textContent=e.target.value+"×";
+
+/* ---------- Tokenitzador interactiu ---------- */
+function tokenizeText(s){
+  const parts=s.match(/[\p{L}\p{N}·]+|[^\s\p{L}\p{N}]/gu)||[];
+  const toks=[];let pos=0;let nw=0;
+  for(const p of parts){
+    const at=s.indexOf(p,pos);const space=at>0&&/\s/.test(s[at-1]);pos=at+p.length;
+    if(/\p{L}|\p{N}/u.test(p))nw++;
+    const pieces=splitWord(p);
+    pieces.forEach((x,i)=>toks.push((i===0&&space?"▁":"")+x));
+  }
+  return {toks,nw};
+}
+function updTk(){
+  const s=$("tkin").value;
+  const {toks,nw}=tokenizeText(s);
+  let w=0;
+  $("tkout").innerHTML=toks.map((t,i)=>{if(t.startsWith("▁")||i===0||PUNCT.has(t))w++;return `<span class="tok c${(w-1)%4+1}"><span>${showTok(t)}</span><span class="id">${tokId(t)}</span></span>`;}).join("");
+  $("tkids").textContent="El model rep: ["+toks.map(tokId).join(", ")+"]";
+  $("nw").textContent=nw;$("nt").textContent=toks.length;$("nc").textContent=s.length;
+}
+let tkEdited=false;
+$("tkin").oninput=()=>{tkEdited=true;updTk();};
+$("tkh").onclick=()=>{
+  const c=$("tkcard").classList.toggle("closed");
+  $("tkh").textContent=(c?"▸ ":"▾ ")+"Què és un token?";
+  if(!c){ /* en desplegar-la, es pleguen les altres seccions */
+    ["textcard","modelcard"].forEach(id=>$(id)._set(true));
+    $("galcard").classList.add("closed");
+    $("galh").textContent="▸ 🔬 Galeria: no sempre és evident";
+  }
+};
+updTk();
+setTexts();
+reset();
+/* ---------- Galeria d'exemples ---------- */
+const GAL=[
+ {k:"Gairebé segur",c:"--green",t:"Tinc el mòbil a l'1 % de ___",
+  n:"Un sol candidat s'ho emporta tot. Tiris com tiris, surt el mateix.",
+  o:[["bateria",.95],["vida",.03],["paciència",.015],["drama",.005]]},
+ {k:"Refrany",c:"--green",t:"Més val tard que ___",
+  n:"Frases fetes: el model les ha vist milers de vegades.",
+  o:[["mai",.97],["d'hora",.02],["dilluns",.01]]},
+ {k:"Coneixement",c:"--teal",t:"El planeta més gran del sistema solar és ___",
+  n:"Un fet que apareix a molts textos: probabilitat molt alta.",
+  o:[["Júpiter",.9],["Saturn",.06],["la Terra",.03],["Plutó",.01]]},
+ {k:"Distribució plana",c:"--peach",t:"Aquest divendres sopem ___",
+  n:"Moltes opcions igual de bones. Cada tirada pot donar una resposta diferent.",
+  o:[["pizza",.17],["sushi",.15],["hamburgueses",.15],["kebab",.14],["ramen",.13],["tacos",.13],["croquetes",.13]]},
+ {k:"Dos favorits",c:"--blue",t:"A la platja, jo soc més de tovallola o de ___",
+  n:"Dues opcions fortes i la resta gairebé res: una moneda a l'aire.",
+  o:[["gandula",.46],["sorra",.42],["ombrel·la",.08],["matalàs",.04]]},
+ {k:"Cua llarga",c:"--pink",t:"El meu gat es diu ___",
+  n:"Hi ha un favorit, però una cua enorme d'opcions petites que sumen molt.",
+  o:[["Misi",.22],["Lluna",.12],["Simba",.1],["Kira",.08],["Nala",.07],["Tom",.06],["Mojito",.05],["Croqueta",.05],["Pixel",.05],["Wifi",.04],["Bolet",.04]]},
+ {k:"Context (1)",c:"--yellow",t:"He anat al banc a ___",
+  n:"«Banc» d'entitat bancària: el context fixa el significat…",
+  o:[["treure diners",.55],["pagar",.2],["obrir un compte",.15],["seure",.1]]},
+ {k:"Context (2)",c:"--yellow",t:"M'he assegut en un banc del ___",
+  n:"…i aquí és un banc per seure. Mateixa paraula, distribució totalment diferent.",
+  o:[["parc",.7],["passeig",.15],["metro",.1],["gimnàs",.05]]},
+ {k:"Sentiments",c:"--mauve",t:"M'han posat un 5 a l'examen i estic ___",
+  n:"Dues lectures possibles (alleujat o decebut) i el model les barreja.",
+  o:[["salvat",.32],["content",.25],["flipant",.15],["trist",.13],["fet pols",.1],["indiferent",.05]]},
+ {k:"No ho pot saber (1)",c:"--red",t:"La contrasenya del wifi de l'institut és ___",
+  n:"El model no la sap, però s'inventa les contrasenyes més típiques. Això és una al·lucinació (i si encerta, canvieu-la!).",
+  o:[["1234",.2],["admin",.16],["password",.14],["wifi2026",.12],["12345678",.11],["contrasenya",.1],["qwerty",.09],["institut",.08]]},
+ {k:"No ho pot saber (2)",c:"--red",t:"D'aquí a deu anys treballaré de ___",
+  n:"Ningú sap el futur, tampoc el model. Però no et dirà «no ho sé»: et donarà una resposta.",
+  o:[["programador",.22],["enginyer d'IA",.16],["administrador de sistemes",.13],["influencer",.11],["freelance",.1],["professor",.09],["CEO d'una startup",.08],["repartidor",.06],["pagès",.05]]},
+];
+let gi=0,gcount=[],gdist=[],gbusy=false;
+const gchips=$("galchips");
+GAL.forEach((g,i)=>{const o=document.createElement("option");o.value=i;o.textContent=(i+1)+". "+g.k;gchips.appendChild(o);});
+gchips.onchange=()=>galSel(+gchips.value);
+$("galprev").onclick=()=>{if(!gbusy)galSel((gi+GAL.length-1)%GAL.length);};
+$("galnext").onclick=()=>{if(!gbusy)galSel((gi+1)%GAL.length);};
+function galDist(){
+  const g=GAL[gi],T=temp();
+  const mx=Math.max(...g.o.map(x=>x[1]));
+  const ws=g.o.map(x=>T<0.05?(x[1]===mx?1:0):Math.pow(x[1],1/T));const sum=ws.reduce((a,b)=>a+b,0);
+  const ps=ws.map(w=>w/sum);
+  /* Com als models reals: 1) top-k, 2) es reescala, 3) top-p sobre la distribució reescalada */
+  const K=+$("topk").value,P=+$("topp").value;
+  const order=ps.map((p,i)=>i).sort((a,b)=>ps[b]-ps[a]);
+  const afterK=order.slice(0,K);
+  const ksum=afterK.reduce((a,i)=>a+ps[i],0);
+  const keep=new Set();let cum=0;
+  afterK.forEach((i,r)=>{const q=ps[i]/ksum;if(r===0||cum<P-1e-9){keep.add(i);cum+=q;}});
+  const ks=[...keep].reduce((a,i)=>a+ps[i],0);
+  return g.o.map((x,i)=>({w:x[0],p:keep.has(i)?ps[i]/ks:0,out:!keep.has(i),orig:ps[i]}));
+}
+function galDraw(fill,win){
+  const g=GAL[gi];gdist=galDist();
+  $("kv").textContent=(+$("topk").value>=g.o.length)?"tots":$("topk").value;
+  $("pv").textContent=Math.round($("topp").value*100)+" %";
+  $("galtag").textContent=g.k;$("galtag").style.background=`var(${g.c})`;
+  $("galprompt").innerHTML=esc(g.t).replace("___",`<span class="blank${fill?" filled":""}">${fill?esc(fill):"???"}</span>`);
+  $("galnote").textContent=g.n;
+  $("galrows").innerHTML=gdist.map((c,i)=>`<div class="row${i===win?" win":""}${c.out?" out":""}"><div class="w">${esc(c.w)}</div><div class="bar"><div class="fill" style="width:${(c.out?c.orig:c.p)*100}%;background:var(${COLORS[i%COLORS.length]})"></div></div><div class="p">${fmt(c.out?c.orig:c.p)}</div><div class="cnt">${gcount[i]?"×"+gcount[i]:""}</div></div>`).join("");
+  const tot=gcount.reduce((a,b)=>a+b,0);
+  const diff=gcount.filter(x=>x>0).length;
+  $("galres").innerHTML=tot?`${tot} tirades → <b>${diff}</b> ${diff===1?"resposta diferent":"respostes diferents"}`:"";
+}
+function galSel(i){gi=i;gcount=GAL[i].o.map(()=>0);gchips.value=i;galDraw();}
+function galPick(){const r=Math.random();let a=0,last=0;for(let i=0;i<gdist.length;i++){if(gdist[i].p>0)last=i;a+=gdist[i].p;if(r<a)return i;}return last;}
+$("gal1").onclick=()=>{if(gbusy)return;const i=galPick();gcount[i]++;galDraw(gdist[i].w,i);};
+$("gal20").onclick=async()=>{
+  if(gbusy)return;gbusy=true;
+  for(let k=0;k<20;k++){const i=galPick();gcount[i]++;galDraw(gdist[i].w,i);await new Promise(r=>setTimeout(r,110));}
+  gbusy=false;
+};
+$("galclr").onclick=()=>{if(!gbusy)galSel(gi);};
+$("temp").addEventListener("input",()=>galDraw());
+$("topk").oninput=()=>galDraw();
+$("topp").oninput=()=>galDraw();
+galSel(0);
+/* ---------- Totes les seccions plegables ---------- */
+document.querySelectorAll(".card").forEach(card=>{
+  if(card.id==="tkcard"||card.id==="galcard")return;
+  let h=card.querySelector(":scope>h2");
+  if(!h){h=document.createElement("h2");h.textContent=card.dataset.title||"";card.prepend(h);}
+  const body=document.createElement("div");body.className="cbody";
+  while(h.nextSibling)body.appendChild(h.nextSibling);
+  card.appendChild(body);
+  h.classList.add("fold");
+  const ar=document.createElement("span");ar.textContent="▾ ";h.prepend(ar);
+  card._set=(c)=>{card.classList.toggle("closed",c);ar.textContent=c?"▸ ":"▾ ";};
+  h.onclick=()=>card._set(!card.classList.contains("closed"));
+});
+$("galh").onclick=()=>{
+  const c=$("galcard").classList.toggle("closed");
+  $("galh").textContent=(c?"▸ ":"▾ ")+"🔬 Galeria: no sempre és evident";
+  if(!c){ /* en desplegar la galeria, es pleguen les altres seccions */
+    document.querySelectorAll(".card").forEach(k=>{
+      if(k.id==="galcard")return;
+      if(k._set)k._set(true);
+      else if(k.id==="tkcard"){k.classList.add("closed");$("tkh").textContent="▸ Què és un token?";}
+    });
+  }
+};
+/* Temperatura de la galeria, sincronitzada amb la principal */
+$("temp").addEventListener("input",()=>{$("temp2").value=$("temp").value;$("tv2").textContent=parseFloat($("temp").value).toFixed(1);});
+$("temp2").oninput=()=>{$("temp").value=$("temp2").value;$("temp").dispatchEvent(new Event("input"));};
+/* En desplegar «Com tria el model»: es mostra sempre el text generat i es plega la galeria */
+(function(){
+  const m=$("modelcard"),orig=m._set;
+  m._set=(c)=>{
+    orig(c);
+    if(!c){
+      $("textcard")._set(false);
+      $("galcard").classList.add("closed");
+      $("galh").textContent="▸ 🔬 Galeria: no sempre és evident";
+    }
+  };
+})();
+/* En desplegar «Text generat» o «Com tria el model»: es plega «Què és un token?» */
+(function(){
+  const foldTk=()=>{$("tkcard").classList.add("closed");$("tkh").textContent="▸ Què és un token?";};
+  ["textcard","modelcard"].forEach(id=>{
+    const k=$(id),orig=k._set;
+    k._set=(c)=>{orig(c);if(!c)foldTk();};
+  });
+})();
+</script>
+</body>
+</html>
